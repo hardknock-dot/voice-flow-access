@@ -378,6 +378,15 @@ const VoiceAssistant = () => {
     }
   };
 
+  const addTodo = (text: string) => {
+    const newTodo: Todo = {
+      id: Date.now().toString(),
+      text: text,
+      completed: false,
+    };
+    setTodos(prev => [...prev, newTodo]);
+  };
+
   return (
     <div className="space-y-6">
       <Card className="w-full max-w-lg shadow-lg">
@@ -535,6 +544,7 @@ const VoiceAssistant = () => {
         onDeleteTodo={(id) => {
           setTodos(prev => prev.filter(t => t.id !== id));
         }}
+        onAddTodo={addTodo}
       />
     </div>
   );
