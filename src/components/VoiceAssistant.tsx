@@ -38,6 +38,8 @@ const VoiceAssistant = () => {
   const [highContrast, setHighContrast] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const listeningTimeoutRef = useRef<number | null>(null);
+  const LISTENING_TIMEOUT = 60000; // 60 seconds of listening time
 
   useEffect(() => {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
@@ -54,6 +56,11 @@ const VoiceAssistant = () => {
         
         setTranscript(transcript);
 
+        // Reset the timeout when user speaks
+        if (listening && listeningTimeoutRef.current) {
+          resetListeningTimeout();
+        }
+
         if (result.isFinal) {
           processCommand(transcript);
         }
@@ -63,8 +70,20 @@ const VoiceAssistant = () => {
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
           setFeedback("Microphone access denied. Please enable microphone permissions.");
+        } else if (event.error === 'network') {
+          // Try to restart recognition on network errors
+          if (listening) {
+            restartRecognition();
+          }
         }
         setListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        // This ensures we keep listening even if the recognition service stops
+        if (listening) {
+          recognitionRef.current?.start();
+        }
       };
 
     } else {
@@ -78,8 +97,40 @@ const VoiceAssistant = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
+      if (listeningTimeoutRef.current) {
+        clearTimeout(listeningTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [listening]);
+
+  const resetListeningTimeout = () => {
+    if (listeningTimeoutRef.current) {
+      clearTimeout(listeningTimeoutRef.current);
+    }
+    
+    listeningTimeoutRef.current = window.setTimeout(() => {
+      if (listening) {
+        toggleListening();
+        setFeedback("Voice recognition paused due to inactivity. Click the microphone to resume.");
+      }
+    }, LISTENING_TIMEOUT);
+  };
+
+  const restartRecognition = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        setTimeout(() => {
+          if (recognitionRef.current && listening) {
+            recognitionRef.current.start();
+            setFeedback("Restarting voice recognition...");
+          }
+        }, 300);
+      } catch (e) {
+        console.error("Error restarting recognition:", e);
+      }
+    }
+  };
 
   const processCommand = (command: string) => {
     if (command.includes("help")) {
@@ -276,10 +327,15 @@ const VoiceAssistant = () => {
     if (listening) {
       recognitionRef.current.stop();
       setFeedback("Voice recognition paused. Click the microphone to resume.");
+      if (listeningTimeoutRef.current) {
+        clearTimeout(listeningTimeoutRef.current);
+        listeningTimeoutRef.current = null;
+      }
     } else {
       setTranscript("");
       recognitionRef.current.start();
       setFeedback("Listening for commands...");
+      resetListeningTimeout();
     }
     
     setListening(!listening);
