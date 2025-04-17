@@ -525,7 +525,9 @@ const VoiceAssistant = () => {
             <div className="grid grid-cols-2 gap-2">
               {COMMANDS.slice(0, 6).map((command) => (
                 <div key={command.name} className="text-xs">
-                  <span className="voice-command-highlight">{command.name}</span>
+                  <span className="bg-accent/10 text-accent-foreground font-medium px-2 py-1 rounded-md">
+                    {command.name}
+                  </span>
                   <span className="ml-1 text-muted-foreground">- {command.description}</span>
                 </div>
               ))}
