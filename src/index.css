@@ -24,7 +24,7 @@
     --muted-foreground: 215.4 16.3% 46.9%;
 
     --accent: 288 95% 60%;
-    --accent-foreground: 210 40% 98%;
+    --accent-foreground: 210deg 69.22% 3.16%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -89,5 +89,16 @@
 }
 
 .voice-command-highlight {
-  @apply bg-secondary/10 text-secondary-foreground font-medium px-2 py-1 rounded-md;
+ 
+  border-radius: calc(var(--radius) - 2px);
+    background-color: hsl(var(--secondary) / 0.1);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-weight: 500;
+    color: hsl(0deg 0% 0%);
+}
+.text-secondary-foreground {
+  color: hsl(0deg 0% 0%);
 }
