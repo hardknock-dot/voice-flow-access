@@ -1,13 +1,23 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Volume2, VolumeX, ZoomIn, ZoomOut, Headphones } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TodoList from "./TodoList";
 
-// Commands we support
+interface Todo {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 const COMMANDS = [
+  { name: "add task", description: "Add a new todo (e.g., 'add task buy groceries')" },
+  { name: "complete task", description: "Mark a task as done (e.g., 'complete task buy groceries')" },
+  { name: "delete task", description: "Remove a task (e.g., 'delete task buy groceries')" },
+  { name: "read tasks", description: "Read all tasks aloud" },
+  { name: "clear completed", description: "Remove all completed tasks" },
   { name: "help", description: "List available commands" },
   { name: "read", description: "Read page content aloud" },
   { name: "stop", description: "Stop reading or listening" },
@@ -23,13 +33,12 @@ const VoiceAssistant = () => {
   const [speaking, setSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [lastCommand, setLastCommand] = useState("");
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [highContrast, setHighContrast] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // Initialize speech recognition
   useEffect(() => {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -72,20 +81,79 @@ const VoiceAssistant = () => {
     };
   }, []);
 
-  // Process voice commands
   const processCommand = (command: string) => {
-    setLastCommand(command);
-    console.log("Processing command:", command);
-    
-    // Help command
     if (command.includes("help")) {
       const helpText = "Available commands: " + COMMANDS.map(cmd => cmd.name).join(", ");
       speak(helpText);
       setFeedback(helpText);
       return;
     }
+
+    if (command.includes("add task")) {
+      const taskText = command.replace("add task", "").trim();
+      if (taskText) {
+        const newTodo: Todo = {
+          id: Date.now().toString(),
+          text: taskText,
+          completed: false,
+        };
+        setTodos(prev => [...prev, newTodo]);
+        speak(`Added task: ${taskText}`);
+        setFeedback(`Added task: ${taskText}`);
+      }
+      return;
+    }
+
+    if (command.includes("complete task")) {
+      const taskText = command.replace("complete task", "").trim();
+      const todo = todos.find(t => t.text.toLowerCase().includes(taskText.toLowerCase()));
+      if (todo) {
+        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, completed: true } : t));
+        speak(`Completed task: ${todo.text}`);
+        setFeedback(`Completed task: ${todo.text}`);
+      } else {
+        speak(`Could not find task containing: ${taskText}`);
+        setFeedback(`Could not find task containing: ${taskText}`);
+      }
+      return;
+    }
+
+    if (command.includes("delete task")) {
+      const taskText = command.replace("delete task", "").trim();
+      const todo = todos.find(t => t.text.toLowerCase().includes(taskText.toLowerCase()));
+      if (todo) {
+        setTodos(prev => prev.filter(t => t.id !== todo.id));
+        speak(`Deleted task: ${todo.text}`);
+        setFeedback(`Deleted task: ${todo.text}`);
+      } else {
+        speak(`Could not find task containing: ${taskText}`);
+        setFeedback(`Could not find task containing: ${taskText}`);
+      }
+      return;
+    }
+
+    if (command.includes("read tasks")) {
+      if (todos.length === 0) {
+        speak("No tasks in the list");
+        setFeedback("No tasks in the list");
+      } else {
+        const tasksText = todos
+          .map(todo => `${todo.completed ? "Completed:" : "Todo:"} ${todo.text}`)
+          .join(". ");
+        speak(`Here are your tasks: ${tasksText}`);
+        setFeedback("Reading tasks");
+      }
+      return;
+    }
+
+    if (command.includes("clear completed")) {
+      const completedCount = todos.filter(t => t.completed).length;
+      setTodos(prev => prev.filter(t => !t.completed));
+      speak(`Cleared ${completedCount} completed tasks`);
+      setFeedback(`Cleared ${completedCount} completed tasks`);
+      return;
+    }
     
-    // Read page content
     if (command.includes("read")) {
       const mainContent = document.querySelector("main")?.textContent || document.body.textContent;
       if (mainContent) {
@@ -98,7 +166,6 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // Stop reading/listening
     if (command.includes("stop")) {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -111,7 +178,6 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // Zoom controls
     if (command.includes("zoom in")) {
       const newZoom = zoomLevel + 10;
       setZoomLevel(newZoom);
@@ -130,7 +196,6 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // High contrast mode
     if (command.includes("high contrast")) {
       const newState = !highContrast;
       setHighContrast(newState);
@@ -148,7 +213,6 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // Navigation with "go to"
     if (command.includes("go to")) {
       const target = command.replace("go to", "").trim();
       const headings = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6, [role=heading]"));
@@ -166,7 +230,6 @@ const VoiceAssistant = () => {
         speak(`Navigated to ${target}`);
         setFeedback(`Navigated to ${target}`);
         
-        // Highlight the element temporarily
         matchedElement.classList.add("highlight-focus");
         setTimeout(() => matchedElement.classList.remove("highlight-focus"), 2000);
       } else {
@@ -176,7 +239,6 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // Click elements
     if (command.includes("click")) {
       const target = command.replace("click", "").trim();
       const buttons = Array.from(document.querySelectorAll("button, [role=button]"));
@@ -199,14 +261,12 @@ const VoiceAssistant = () => {
       return;
     }
     
-    // If no command matched
     if (command.length > 3) {
       setFeedback(`Command not recognized: "${command}". Say "help" for available commands.`);
       speak(`I didn't understand "${command}". Say "help" for available commands.`);
     }
   };
 
-  // Toggle listening state
   const toggleListening = () => {
     if (!recognitionRef.current) {
       setFeedback("Speech recognition is not supported in this browser.");
@@ -225,14 +285,12 @@ const VoiceAssistant = () => {
     setListening(!listening);
   };
 
-  // Text-to-speech function
   const speak = (text: string) => {
     if (!window.speechSynthesis) {
       console.error("Speech synthesis not supported");
       return;
     }
 
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -240,7 +298,6 @@ const VoiceAssistant = () => {
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
     
-    // Get available voices and select a good one if available
     const voices = window.speechSynthesis.getVoices();
     const preferredVoice = voices.find(voice => 
       voice.name.includes("Daniel") || voice.name.includes("Google") || voice.name.includes("Microsoft")
@@ -257,7 +314,6 @@ const VoiceAssistant = () => {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Cancel current speech
   const cancelSpeech = () => {
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -267,150 +323,164 @@ const VoiceAssistant = () => {
   };
 
   return (
-    <Card className="w-full max-w-lg shadow-lg">
-      <CardHeader className="space-y-1 bg-primary text-primary-foreground rounded-t-lg">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <Headphones className="h-5 w-5" />
-            Voice Flow Access
-          </CardTitle>
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => {
-                const newZoom = zoomLevel + 10;
-                setZoomLevel(newZoom);
-                document.body.style.fontSize = `${newZoom}%`;
-                setFeedback(`Zoomed in to ${newZoom}%`);
-              }}
-              className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
-            >
-              <ZoomIn className="h-4 w-4" />
-              <span className="sr-only">Zoom In</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => {
-                const newZoom = Math.max(zoomLevel - 10, 70);
-                setZoomLevel(newZoom);
-                document.body.style.fontSize = `${newZoom}%`;
-                setFeedback(`Zoomed out to ${newZoom}%`);
-              }}
-              className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
-            >
-              <ZoomOut className="h-4 w-4" />
-              <span className="sr-only">Zoom Out</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => {
-                const newState = !highContrast;
-                setHighContrast(newState);
-                if (newState) {
-                  document.body.classList.add("high-contrast");
-                  document.body.style.backgroundColor = "#000";
-                  document.body.style.color = "#fff";
-                } else {
-                  document.body.classList.remove("high-contrast");
-                  document.body.style.backgroundColor = "";
-                  document.body.style.color = "";
-                }
-                setFeedback(`High contrast mode ${newState ? 'enabled' : 'disabled'}`);
-              }}
-              className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
-            >
-              <span className="text-xs font-bold">A</span>
-              <span className="sr-only">Toggle High Contrast</span>
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-6 space-y-4">
-        <div className="flex justify-center mb-4">
-          <Button
-            variant={listening ? "destructive" : "default"}
-            className={cn(
-              "rounded-full h-16 w-16 flex items-center justify-center relative",
-              listening && "mic-pulse"
-            )}
-            onClick={toggleListening}
-            aria-label={listening ? "Stop listening" : "Start listening"}
-          >
-            {listening ? (
-              <MicOff className="h-6 w-6" />
-            ) : (
-              <Mic className="h-6 w-6" />
-            )}
-          </Button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Badge variant={listening ? "default" : "outline"} className="capitalize">
-              {listening ? "Listening" : "Idle"}
-            </Badge>
-            {speaking && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Volume2 className="h-3 w-3" /> Speaking
-              </Badge>
-            )}
-          </div>
-          
-          {transcript && (
-            <div className="p-3 bg-muted rounded-md text-sm">
-              <p className="font-medium text-muted-foreground">I heard:</p>
-              <p className="mt-1">{transcript}</p>
+    <div className="space-y-6">
+      <Card className="w-full max-w-lg shadow-lg">
+        <CardHeader className="space-y-1 bg-primary text-primary-foreground rounded-t-lg">
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <Headphones className="h-5 w-5" />
+              Voice Flow Access
+            </CardTitle>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={() => {
+                  const newZoom = zoomLevel + 10;
+                  setZoomLevel(newZoom);
+                  document.body.style.fontSize = `${newZoom}%`;
+                  setFeedback(`Zoomed in to ${newZoom}%`);
+                }}
+                className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
+              >
+                <ZoomIn className="h-4 w-4" />
+                <span className="sr-only">Zoom In</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => {
+                  const newZoom = Math.max(zoomLevel - 10, 70);
+                  setZoomLevel(newZoom);
+                  document.body.style.fontSize = `${newZoom}%`;
+                  setFeedback(`Zoomed out to ${newZoom}%`);
+                }}
+                className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
+              >
+                <ZoomOut className="h-4 w-4" />
+                <span className="sr-only">Zoom Out</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => {
+                  const newState = !highContrast;
+                  setHighContrast(newState);
+                  if (newState) {
+                    document.body.classList.add("high-contrast");
+                    document.body.style.backgroundColor = "#000";
+                    document.body.style.color = "#fff";
+                  } else {
+                    document.body.classList.remove("high-contrast");
+                    document.body.style.backgroundColor = "";
+                    document.body.style.color = "";
+                  }
+                  setFeedback(`High contrast mode ${newState ? 'enabled' : 'disabled'}`);
+                }}
+                className="h-8 w-8 bg-white/20 hover:bg-white/30 text-white"
+              >
+                <span className="text-xs font-bold">A</span>
+                <span className="sr-only">Toggle High Contrast</span>
+              </Button>
             </div>
-          )}
-          
-          {feedback && (
-            <div className="p-3 bg-secondary/10 rounded-md">
-              <p className="text-secondary-foreground">{feedback}</p>
-            </div>
-          )}
-          
-          <div className="flex justify-between">
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex justify-center mb-4">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                speak("Available commands: " + COMMANDS.map(cmd => cmd.name).join(", "));
-                setFeedback("Available commands: " + COMMANDS.map(cmd => cmd.name).join(", "));
-              }}
-              className="text-xs"
+              variant={listening ? "destructive" : "default"}
+              className={cn(
+                "rounded-full h-16 w-16 flex items-center justify-center relative",
+                listening && "mic-pulse"
+              )}
+              onClick={toggleListening}
+              aria-label={listening ? "Stop listening" : "Start listening"}
             >
-              Show Commands
+              {listening ? (
+                <MicOff className="h-6 w-6" />
+              ) : (
+                <Mic className="h-6 w-6" />
+              )}
             </Button>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge variant={listening ? "default" : "outline"} className="capitalize">
+                {listening ? "Listening" : "Idle"}
+              </Badge>
+              {speaking && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Volume2 className="h-3 w-3" /> Speaking
+                </Badge>
+              )}
+            </div>
             
-            {speaking && (
+            {transcript && (
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <p className="font-medium text-muted-foreground">I heard:</p>
+                <p className="mt-1">{transcript}</p>
+              </div>
+            )}
+            
+            {feedback && (
+              <div className="p-3 bg-secondary/10 rounded-md">
+                <p className="text-secondary-foreground">{feedback}</p>
+              </div>
+            )}
+            
+            <div className="flex justify-between">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={cancelSpeech}
+                onClick={() => {
+                  speak("Available commands: " + COMMANDS.map(cmd => cmd.name).join(", "));
+                  setFeedback("Available commands: " + COMMANDS.map(cmd => cmd.name).join(", "));
+                }}
                 className="text-xs"
               >
-                <VolumeX className="h-3 w-3 mr-1" /> Stop Speaking
+                Show Commands
               </Button>
-            )}
+              
+              {speaking && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelSpeech}
+                  className="text-xs"
+                >
+                  <VolumeX className="h-3 w-3 mr-1" /> Stop Speaking
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-        
-        <div className="mt-4 pt-4 border-t text-sm">
-          <p className="font-medium text-muted-foreground mb-2">Example commands:</p>
-          <div className="grid grid-cols-2 gap-2">
-            {COMMANDS.slice(0, 6).map((command) => (
-              <div key={command.name} className="text-xs">
-                <span className="voice-command-highlight">{command.name}</span>
-                <span className="ml-1 text-muted-foreground">- {command.description}</span>
-              </div>
-            ))}
+          
+          <div className="mt-4 pt-4 border-t text-sm">
+            <p className="font-medium text-muted-foreground mb-2">Example commands:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {COMMANDS.slice(0, 6).map((command) => (
+                <div key={command.name} className="text-xs">
+                  <span className="voice-command-highlight">{command.name}</span>
+                  <span className="ml-1 text-muted-foreground">- {command.description}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      
+      <TodoList
+        todos={todos}
+        onToggleTodo={(id) => {
+          setTodos(prev => prev.map(t => 
+            t.id === id ? { ...t, completed: !t.completed } : t
+          ));
+        }}
+        onDeleteTodo={(id) => {
+          setTodos(prev => prev.filter(t => t.id !== id));
+        }}
+      />
+    </div>
   );
 };
 
